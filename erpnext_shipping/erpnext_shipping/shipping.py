@@ -99,6 +99,7 @@ def create_shipment(
 	pickup_contact_name=None,
 	delivery_contact_name=None,
 	delivery_notes=None,
+	create_return=0,
 ):
 	# Create Shipment for the selected provider
 	if delivery_notes is None:
@@ -145,6 +146,16 @@ def create_shipment(
 			delivery_contact=delivery_contact,
 			service_info=service_info,
 		)
+		if int(create_return):
+			return_shipment_info = sendcloud.create_return_shipment(
+				shipment=shipment,
+				pickup_address=pickup_address,
+				pickup_contact=pickup_contact,
+				delivery_address=delivery_address,
+				delivery_contact=delivery_contact,
+				service_info=service_info,
+				shipment_parcel=shipment_parcel,
+			)
 
 	if shipment_info:
 		shipment = frappe.get_doc("Shipment", shipment)
@@ -159,6 +170,8 @@ def create_shipment(
 				"status": "Booked",
 			}
 		)
+	if return_shipment_info:
+		pass
 
 		if delivery_notes:
 			update_delivery_note(delivery_notes=delivery_notes, shipment_info=shipment_info)

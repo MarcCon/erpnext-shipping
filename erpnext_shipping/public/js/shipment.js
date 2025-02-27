@@ -168,6 +168,12 @@ function select_from_available_services(frm, available_services) {
 		size: "extra-large",
 		fields: [
 			{
+				fieldtype: "Check",
+				fieldname: "create_return",
+				label: __("Create Return Shipment"),
+				default: 0,
+			},
+			{
 				fieldtype: "HTML",
 				fieldname: "available_services",
 				label: __("Available Services"),
@@ -191,10 +197,10 @@ function select_from_available_services(frm, available_services) {
 		let service_type = $(this).attr("data-type");
 		let service_index = cint($(this).attr("id").split("-")[2]);
 		let service_data = arranged_services[service_type][service_index];
-		frm.select_row(service_data);
+		frm.select_row(service_data, dialog.get_values());
 	});
 
-	frm.select_row = function (service_data) {
+	frm.select_row = function (service_data, dialog_values) {
 		frappe.call({
 			method: "erpnext_shipping.erpnext_shipping.shipping.create_shipment",
 			freeze: true,
@@ -216,6 +222,7 @@ function select_from_available_services(frm, available_services) {
 				value_of_goods: frm.doc.value_of_goods,
 				service_data: service_data,
 				delivery_notes: delivery_notes,
+				create_return: dialog_values.create_return,
 			},
 			callback: function (r) {
 				if (!r.exc) {
