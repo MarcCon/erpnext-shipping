@@ -18,6 +18,7 @@ SENDCLOUD_PROVIDER = "SendCloud"
 WEIGHT_DECIMALS = 3
 CURRENCY_DECIMALS = 2
 
+
 BASE_URL = "https://panel.sendcloud.sc/api"
 FETCH_SHIPPING_OPTIONS_URL = f"{BASE_URL}/v3/fetch-shipping-options"
 SHIPMENTS_URL = f"{BASE_URL}/v3/shipments"
@@ -328,8 +329,33 @@ class SendCloudUtils:
 			return "ups:standard/return"
 		elif "dhl" in service_code:
 			return "dhl_de:retoure/eco_delivery"
-		elif "dpd:" in service_code:
+		elif "dpd" in service_code:
 			return "dpd:return/return"
+		elif "sendcloud" in service_code:
+			return "sendcloud:letterreturn"
+
+	def get_return_label(self, return_id):
+		return_ids = return_id.split(", ")
+		label_urls = []
+		for rid in return_ids:
+			try:
+				response = requests.get(
+					f"{BASE_URL}/v3/returns/{rid}",
+					auth=(self.api_key, self.api_secret),
+				)
+				data = response.json()
+				label_url = data.get("label_url")
+				if label_url:
+					label_urls.append(label_url)
+				else:
+					frappe.msgprint(
+						_("No return label available. Please check if the return has been announced."),
+						indicator="orange",
+						alert=True,
+					)
+			except Exception as e:
+				show_error_alert("retrieving SendCloud Return Label: " + str(e))
+		return label_urls
 
 	def create_return_shipment(
 		self,
@@ -341,7 +367,7 @@ class SendCloudUtils:
 		service_info,
 		shipment_parcel,
 	):
-		payload = self.build_payload(
+		payloads = self.build_payload(
 			shipment,
 			pickup_address,
 			pickup_contact,
@@ -351,35 +377,45 @@ class SendCloudUtils:
 			shipment_parcel,
 			is_return=True,
 		)
-		try:
-			response = requests.post(
-				f"{BASE_URL}/v3/returns",
-				json=payload,
-				auth=(self.api_key, self.api_secret),
-				headers={"Accept": "application/json", "Content-Type": "application/json"},
-			)
-			response_data = response.json()
-			if "errors" in response_data and response_data["errors"]:
-				error_details = [
-					f"Code: {err.get('code', 'N/A')}, Detail: {err.get('detail', 'N/A')}"
-					for err in response_data["errors"]
-				]
-				error_message = "\n".join(error_details)
-				frappe.msgprint(
-					_("Error occurred while creating return shipment for order {0}:").format(shipment)
-					+ f"\n{error_message}",
-					indicator="red",
-					alert=True,
+		shipments_results = []
+		for payload in payloads:
+			try:
+				response = requests.post(
+					f"{BASE_URL}/v3/returns",
+					json=payload,
+					auth=(self.api_key, self.api_secret),
+					headers={"Accept": "application/json", "Content-Type": "application/json"},
 				)
-				return None
-			return {
-				"return_id": response_data.get("return_id"),
-				"parcel_id": response_data.get("parcel_id"),
-				"multi_collo_ids": response_data.get("multi_collo_ids", []),
+				response_data = response.json()
+				if "errors" in response_data and response_data["errors"]:
+					error_details = []
+					for err in response_data["errors"]:
+						error_code = err.get("code", "N/A")
+						error_msg = err.get("message", "N/A")
+						error_details.append(f"Code: {error_code}, Message: {error_msg}")
+					error_message = "\n".join(error_details)
+					frappe.msgprint(
+						_("Error occurred while creating return shipment:") + f"{error_message}",
+						indicator="red",
+						alert=True,
+					)
+					continue
+				shipments_results.append(
+					{
+						"return_id": str(response_data.get("return_id")),
+						"parcel_id": str(response_data.get("parcel_id")),
+					}
+				)
+			except Exception:
+				show_error_alert("creating SendCloud Return Shipment")
+		if shipments_results:
+			combined_result = {
+				"return_id": ", ".join(item["return_id"] for item in shipments_results),
+				"parcel_id": ", ".join(item["parcel_id"] for item in shipments_results),
+				"multi_collo_ids": [],
 			}
-		except Exception:
-			show_error_alert("creating SendCloud Return Shipment")
-			return None
+			return combined_result
+		return None
 
 	def build_payload(
 		self,
@@ -392,73 +428,109 @@ class SendCloudUtils:
 		shipment_parcel,
 		is_return=False,
 	):
-		parcels = []
-		for i, parcel in enumerate(json.loads(shipment_parcel), start=1):
-			parcel_count = parcel.get("count", 1)
-			for j in range(parcel_count):
-				parcel_data = self.get_parcel(parcel, shipment, i)
-				parcels.append(parcel_data)
+		if not is_return:
+			parcels = []
+			for i, parcel in enumerate(json.loads(shipment_parcel), start=1):
+				parcel_count = parcel.get("count", 1)
+				for j in range(parcel_count):
+					parcel_data = self.get_parcel(parcel, shipment, i)
+					parcels.append(parcel_data)
 
-		aggregated_collo_count = len(parcels)
-
-		if is_return:
-			house_number, address = self.extract_house_number(delivery_address.address_line1)
-			from_address = {
-				"name": f"{delivery_contact.first_name} {delivery_contact.last_name}",
-				"company_name": delivery_address.address_title,
-				"address_line_1": address
-				or delivery_address.address_line1,  # Using original address if parsing fails
-				"house_number": house_number
-				or " ",  # API requires a house number. If None, we use a U+200A HAIR SPACE to bypass validation without displaying a number				"postal_code": delivery_address.pincode,
-				"city": delivery_address.city,
-				"country_code": delivery_address.country_code.upper(),
-				"phone_number": delivery_contact.phone,
+			payload = {
+				"parcels": parcels,
+				"from_address": {
+					"name": f"{pickup_contact.first_name} {pickup_contact.last_name}",
+					"company_name": pickup_address.address_title,
+					"address_line_1": pickup_address.address_line1,
+					"house_number": (self.extract_house_number(pickup_address.address_line1)[0] or " "),
+					"postal_code": pickup_address.pincode,
+					"city": pickup_address.city,
+					"country_code": pickup_address.country_code.upper(),
+					"phone_number": pickup_contact.phone,
+					"email": pickup_contact.email_id,
+				},
+				"to_address": {
+					"company_name": delivery_address.address_title,
+					"name": f"{delivery_contact.first_name} {delivery_contact.last_name}",
+					"address_line_1": delivery_address.address_line1,
+					"postal_code": delivery_address.pincode,
+					"city": delivery_address.city,
+					"country_code": delivery_address.country_code.upper(),
+					"phone_number": delivery_contact.phone,
+				},
+				"ship_with": {
+					"type": "shipping_option_code",
+					"properties": {"shipping_option_code": service_info["service_id"]},
+				},
 			}
-			to_address = {
-				"name": f"{pickup_contact.first_name} {pickup_contact.last_name}",
-				"company_name": pickup_address.address_title,
-				"address_line_1": pickup_address.address_line1,
-				"postal_code": pickup_address.pincode,
-				"city": pickup_address.city,
-				"country_code": pickup_address.country_code.upper(),
-				"phone_number": pickup_contact.phone,
-			}
-			shipping_option_code = self.get_return_shipping_code(service_info["service_id"])
+			return payload
 		else:
-			house_number, address = self.extract_house_number(pickup_address.address_line1)
-			from_address = {
-				"name": f"{pickup_contact.first_name} {pickup_contact.last_name}",
-				"company_name": pickup_address.address_title,
-				"address_line_1": address
-				or pickup_address.address_line1,  # Using original address if parsing fails
-				"house_number": house_number
-				or " ",  # API requires a house number. If None, we use a U+200A HAIR SPACE to bypass validation without displaying a number
-				"postal_code": pickup_address.pincode,
-				"city": pickup_address.city,
-				"country_code": pickup_address.country_code.upper(),
-				"phone_number": pickup_contact.phone,
-			}
-			to_address = {
-				"company_name": delivery_address.address_title,
-				"name": f"{delivery_contact.first_name} {delivery_contact.last_name}",
-				"address_line_1": delivery_address.address_line1,
-				"postal_code": delivery_address.pincode,
-				"city": delivery_address.city,
-				"country_code": delivery_address.country_code.upper(),
-				"phone_number": delivery_contact.phone,
-			}
-			shipping_option_code = service_info["service_id"]
+			payloads = []
+			parcels = json.loads(shipment_parcel)
+			for i, parcel in enumerate(parcels, start=1):
+				parcel_count = parcel.get("count", 1)
+				for j in range(parcel_count):
+					payload = {
+						"from_address": {
+							"name": f"{delivery_contact.first_name} {delivery_contact.last_name}",
+							"company_name": delivery_address.address_title,
+							"address_line_1": delivery_address.address_line1,
+							"house_number": (
+								self.extract_house_number(delivery_address.address_line1)[0] or " "
+							),
+							"postal_code": delivery_address.pincode,
+							"city": delivery_address.city,
+							"country_code": delivery_address.country_code.upper(),
+							"phone_number": delivery_contact.phone,
+							"email": delivery_contact.email_id,
+						},
+						"to_address": {
+							"name": f"{pickup_contact.first_name} {pickup_contact.last_name}",
+							"company_name": pickup_address.address_title,
+							"address_line_1": pickup_address.address_line1,
+							"house_number": (
+								self.extract_house_number(pickup_address.address_line1)[0] or " "
+							),
+							"postal_code": pickup_address.pincode,
+							"city": pickup_address.city,
+							"country_code": pickup_address.country_code.upper(),
+							"phone_number": pickup_contact.phone,
+						},
+						"ship_with": {
+							"type": "shipping_option_code",
+							"shipping_option_code": self.get_return_shipping_code(service_info["service_id"]),
+						},
+						"dimensions": {
+							"length": parcel.get("length", 0),
+							"width": parcel.get("width", 0),
+							"height": parcel.get("height", 0),
+							"unit": "cm",
+						},
+						"weight": {
+							"value": flt(parcel.get("weight", 0), WEIGHT_DECIMALS),
+							"unit": "kg",
+						},
+					}
+					payloads.append(payload)
+			return payloads
 
-		payload = {
-			"parcels": parcels,
-			"from_address": from_address,
-			"to_address": to_address,
-			"ship_with": {
-				"type": "shipping_option_code",
-				"properties": {"shipping_option_code": shipping_option_code},
-			},
+	def get_return_tracking_data(self, return_id):
+		return_ids = [rid.strip() for rid in return_id.split(",")] if "," in return_id else [return_id]
+		tracking_numbers = []
+		tracking_urls = []
+		statuses = []
+		for rid in return_ids:
+			try:
+				response = requests.get(f"{BASE_URL}/v3/returns/{rid}", auth=(self.api_key, self.api_secret))
+				response.raise_for_status()
+				data = response.json()
+				tracking_numbers.append(data.get("tracking_number", ""))
+				tracking_urls.append(data.get("tracking_url", ""))
+				statuses.append(data.get("status", ""))
+			except Exception as e:
+				show_error_alert("retrieving SendCloud Return Tracking Data: " + str(e))
+		return {
+			"tracking_number": ", ".join(tracking_numbers),
+			"tracking_url": ", ".join(tracking_urls),
+			"status": ", ".join(statuses),
 		}
-		if is_return:
-			payload["collo_count"] = aggregated_collo_count if service_info.get("multicollo") else 1
-
-		return payload

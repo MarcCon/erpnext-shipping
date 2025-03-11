@@ -40,24 +40,91 @@ frappe.ui.form.on("Shipment", {
 					__("Tools")
 				);
 
-				frm.add_custom_button(
-					__("Track Status"),
-					function () {
-						if (frm.doc.tracking_url) {
-							const urls = frm.doc.tracking_url.split(", ");
-							urls.forEach((url) => window.open(url));
-						} else {
-							let msg = __(
-								"Please complete Shipment (ID: {0}) on {1} and Update Tracking.",
-								[frm.doc.shipment_id, frm.doc.service_provider]
-							);
-							frappe.msgprint({ message: msg, title: __("Incomplete Shipment") });
-						}
-					},
-					__("View")
-				);
+				if (frm.doc.return_shipment_id) {
+					frm.add_custom_button(
+						__("Track Parcel Status"),
+						function () {
+							if (frm.doc.tracking_url) {
+								const urls = frm.doc.tracking_url.split(", ");
+								urls.forEach((url) => window.open(url));
+							} else {
+								let msg = __(
+									"Please complete Shipment (ID: {0}) on {1} and Update Tracking.",
+									[frm.doc.shipment_id, frm.doc.service_provider]
+								);
+								frappe.msgprint({
+									message: msg,
+									title: __("Incomplete Shipment"),
+								});
+							}
+						},
+						__("View")
+					);
+					frm.add_custom_button(
+						__("Track Return Status"),
+						function () {
+							if (frm.doc.return_tracking_url) {
+								const urls = frm.doc.return_tracking_url.split(", ");
+								urls.forEach((url) => window.open(url));
+							} else {
+								frappe.msgprint({
+									message: __("Return tracking data not available."),
+									title: __("No Return Tracking"),
+								});
+							}
+						},
+						__("View")
+					);
+				} else {
+					frm.add_custom_button(
+						__("Track Status"),
+						function () {
+							if (frm.doc.tracking_url) {
+								const urls = frm.doc.tracking_url.split(", ");
+								urls.forEach((url) => window.open(url));
+							} else {
+								let msg = __(
+									"Please complete Shipment (ID: {0}) on {1} and Update Tracking.",
+									[frm.doc.shipment_id, frm.doc.service_provider]
+								);
+								frappe.msgprint({
+									message: msg,
+									title: __("Incomplete Shipment"),
+								});
+							}
+						},
+						__("View")
+					);
+				}
 			}
 		}
+		if (frm.doc.return_shipment_id) {
+			frm.add_custom_button(
+				__("Print Return Label"),
+				function () {
+					return frm.events.print_return_label(frm);
+				},
+				__("Tools")
+			);
+		}
+	},
+
+	print_return_label: function (frm) {
+		frappe.call({
+			method: "erpnext_shipping.erpnext_shipping.shipping.print_return_label",
+			freeze: true,
+			freeze_message: __("Printing Return Label"),
+			args: { shipment: frm.doc.name },
+			callback: function (r) {
+				if (r.message) {
+					if (Array.isArray(r.message)) {
+						r.message.forEach((url) => window.open(url));
+					} else {
+						window.open(r.message);
+					}
+				}
+			},
+		});
 	},
 
 	fetch_shipping_rates: function (frm) {

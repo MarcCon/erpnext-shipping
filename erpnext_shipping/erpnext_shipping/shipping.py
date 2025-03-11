@@ -146,7 +146,7 @@ def create_shipment(
 			delivery_contact=delivery_contact,
 			service_info=service_info,
 		)
-		if int(create_return):
+		if create_return:
 			return_shipment_info = sendcloud.create_return_shipment(
 				shipment=shipment,
 				pickup_address=pickup_address,
@@ -171,8 +171,22 @@ def create_shipment(
 			}
 		)
 	if return_shipment_info:
-		pass
-
+		shipment = frappe.get_doc("Shipment", shipment)
+		shipment.db_set(
+			{
+				"return_shipment_id": return_shipment_info.get("return_id"),
+				"return_parcel_id": return_shipment_info.get("parcel_id"),
+			}
+		)
+		return_tracking = sendcloud.get_return_tracking_data(return_shipment_info.get("return_id"))
+		if return_tracking:
+			shipment.db_set(
+				{
+					"return_status": return_tracking.get("status"),
+					"return_tracking_number": return_tracking.get("tracking_number"),
+					"return_tracking_url": return_tracking.get("tracking_url"),
+				}
+			)
 		if delivery_notes:
 			update_delivery_note(delivery_notes=delivery_notes, shipment_info=shipment_info)
 
@@ -206,19 +220,40 @@ def print_shipping_label(shipment: str):
 		_labels = sendcloud.get_label(shipment_id)
 		for i, label_url in enumerate(_labels, start=1):
 			content = sendcloud.download_label(label_url)
-			file_url = save_label_as_attachment(shipment, content, i)
+			file_url = save_label_as_attachment(shipment, content, index=i)
 			shipping_label.append(file_url)
 
 	return shipping_label
 
 
-def save_label_as_attachment(shipment: str, content: bytes, index: int = None) -> str:
+@frappe.whitelist()
+def print_return_label(shipment: str):
+	shipment_doc = frappe.get_doc("Shipment", shipment)
+	service_provider = shipment_doc.service_provider
+
+	return_shipment_id = shipment_doc.get("return_shipment_id")
+
+	if service_provider == SENDCLOUD_PROVIDER:
+		sendcloud = SendCloudUtils()
+		return_label = []
+		_labels = sendcloud.get_return_label(return_shipment_id)
+		for i, label_url in enumerate(_labels, start=1):
+			content = sendcloud.download_label(label_url)
+			file_url = save_label_as_attachment(shipment, content, index=i, label_type="return")
+			return_label.append(file_url)
+
+	return return_label
+
+
+def save_label_as_attachment(
+	shipment: str, content: bytes, index: int = None, label_type: str = "shipping"
+) -> str:
 	"""Store label as attachment to Shipment and return the URL."""
 	attachment = frappe.new_doc("File")
 	if index is not None:
-		attachment.file_name = f"label_{shipment}_{index}.pdf"
+		attachment.file_name = f"{label_type}_label_{shipment}_{index}.pdf"
 	else:
-		attachment.file_name = f"label_{shipment}.pdf"
+		attachment.file_name = f"{label_type}_label_{shipment}.pdf"
 	attachment.content = content
 	attachment.folder = "Home/Attachments"
 	attachment.attached_to_doctype = "Shipment"

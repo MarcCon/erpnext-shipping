@@ -195,7 +195,55 @@ shipping_custom_fields = {
 			"translatable": 0,
 			"insert_after": "tracking_status",
 		},
-	]
+	],
+	"Shipment": [
+		{
+			"fieldname": "return_information_section",
+			"fieldtype": "Section Break",
+			"label": "Return Information",
+			"insert_after": "tracking_status_info",
+		},
+		{
+			"fieldname": "return_shipment_id",
+			"fieldtype": "Data",
+			"label": "Return ID",
+			"read_only": 1,
+			"no_copy": 1,
+			"insert_after": "return_information_section",
+		},
+		{
+			"fieldname": "return_parcel_id",
+			"fieldtype": "Data",
+			"label": "Parcel ID",
+			"read_only": 1,
+			"no_copy": 1,
+			"insert_after": "return_shipment_id",
+		},
+		{
+			"fieldname": "return_status",
+			"fieldtype": "Data",
+			"label": "Return Status",
+			"read_only": 1,
+			"no_copy": 1,
+			"insert_after": "return_parcel_id",
+		},
+		{
+			"fieldname": "return_tracking_number",
+			"fieldtype": "Data",
+			"label": "Return Tracking Number",
+			"read_only": 1,
+			"no_copy": 1,
+			"insert_after": "return_carrier",
+		},
+		{
+			"fieldname": "return_tracking_url",
+			"label": "Return Tracking URL",
+			"fieldtype": "Small Text",
+			"no_copy": 1,
+			"read_only": 1,
+			"hidden": 1,
+		},
+	],
 }
 
 doc_events = {
