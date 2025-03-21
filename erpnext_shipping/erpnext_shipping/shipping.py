@@ -178,17 +178,8 @@ def create_shipment(
 				"return_parcel_id": return_shipment_info.get("parcel_id"),
 			}
 		)
-		return_tracking = sendcloud.get_return_tracking_data(return_shipment_info.get("return_id"))
-		if return_tracking:
-			shipment.db_set(
-				{
-					"return_status": return_tracking.get("status"),
-					"return_tracking_number": return_tracking.get("tracking_number"),
-					"return_tracking_url": return_tracking.get("tracking_url"),
-				}
-			)
-		if delivery_notes:
-			update_delivery_note(delivery_notes=delivery_notes, shipment_info=shipment_info)
+	if delivery_notes:
+		update_delivery_note(delivery_notes=delivery_notes, shipment_info=shipment_info)
 
 	return shipment_info
 
@@ -231,7 +222,7 @@ def print_return_label(shipment: str):
 	shipment_doc = frappe.get_doc("Shipment", shipment)
 	service_provider = shipment_doc.service_provider
 
-	return_shipment_id = shipment_doc.get("return_shipment_id")
+	return_shipment_id = shipment_doc.return_shipment_id
 
 	if service_provider == SENDCLOUD_PROVIDER:
 		sendcloud = SendCloudUtils()
@@ -292,6 +283,31 @@ def update_tracking(shipment, service_provider, shipment_id, delivery_notes=None
 
 	if delivery_notes:
 		update_delivery_note(delivery_notes=delivery_notes, tracking_info=tracking_data)
+
+
+@frappe.whitelist()
+def update_return_tracking(
+	shipment,
+	service_provider,
+	return_shipment_id,
+):
+	# Update Tracking info in Return Shipment
+	tracking_data = None
+	if service_provider == SENDCLOUD_PROVIDER:
+		sendcloud = SendCloudUtils()
+		tracking_data = sendcloud.get_return_tracking_data(return_shipment_id)
+
+	if not tracking_data:
+		return
+
+	shipment = frappe.get_doc("Shipment", shipment)
+	shipment.db_set(
+		{
+			"return_status": tracking_data.get("status"),
+			"return_tracking_number": tracking_data.get("tracking_number"),
+			"return_tracking_url": tracking_data.get("tracking_url"),
+		}
+	)
 
 
 def update_delivery_note(delivery_notes, shipment_info=None, tracking_info=None):

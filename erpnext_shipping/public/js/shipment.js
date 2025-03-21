@@ -27,6 +27,15 @@ frappe.ui.form.on("Shipment", {
 				},
 				__("Tools")
 			);
+			if (frm.doc.return_shipment_id) {
+				frm.add_custom_button(
+					__("Print Return Label"),
+					function () {
+						return frm.events.print_return_label(frm);
+					},
+					__("Tools")
+				);
+			}
 			if (frm.doc.tracking_status != "Delivered") {
 				frm.add_custom_button(
 					__("Update Tracking"),
@@ -97,15 +106,6 @@ frappe.ui.form.on("Shipment", {
 					);
 				}
 			}
-		}
-		if (frm.doc.return_shipment_id) {
-			frm.add_custom_button(
-				__("Print Return Label"),
-				function () {
-					return frm.events.print_return_label(frm);
-				},
-				__("Tools")
-			);
 		}
 	},
 
@@ -198,6 +198,7 @@ frappe.ui.form.on("Shipment", {
 		(frm.doc.shipment_delivery_note || []).forEach((d) => {
 			delivery_notes.push(d.delivery_note);
 		});
+
 		frappe.call({
 			method: "erpnext_shipping.erpnext_shipping.shipping.update_tracking",
 			freeze: true,
@@ -209,8 +210,26 @@ frappe.ui.form.on("Shipment", {
 				delivery_notes: delivery_notes,
 			},
 			callback: function (r) {
-				if (!r.exc) {
-					frm.reload_doc();
+				if (frm.doc.return_shipment_id) {
+					frappe.call({
+						method: "erpnext_shipping.erpnext_shipping.shipping.update_return_tracking",
+						freeze: true,
+						freeze_message: __("Updating Return Tracking"),
+						args: {
+							shipment: frm.doc.name,
+							return_shipment_id: frm.doc.return_shipment_id,
+							service_provider: service_provider,
+						},
+						callback: function (r2) {
+							if (!r2.exc) {
+								frm.reload_doc();
+							}
+						},
+					});
+				} else {
+					if (!r.exc) {
+						frm.reload_doc();
+					}
 				}
 			},
 		});

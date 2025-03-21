@@ -530,7 +530,7 @@ class SendCloudUtils:
 			except Exception as e:
 				show_error_alert("retrieving SendCloud Return Tracking Data: " + str(e))
 		return {
-			"tracking_number": ", ".join(tracking_numbers),
-			"tracking_url": ", ".join(tracking_urls),
-			"status": ", ".join(statuses),
+			"tracking_number": ", ".join([str(n) for n in tracking_numbers if n]),
+			"tracking_url": ", ".join([str(url) for url in tracking_urls if url]),
+			"status": ", ".join([str(s) for s in statuses if s]),
 		}
