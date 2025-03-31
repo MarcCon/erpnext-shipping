@@ -185,8 +185,8 @@ def create_shipment(
 			}
 		)
 
-	if delivery_notes:
-		update_delivery_note(delivery_notes=delivery_notes, shipment_info=shipment_info)
+		if delivery_notes:
+			update_delivery_note(delivery_notes=delivery_notes, shipment_info=shipment_info)
 
 	return shipment_info
 
@@ -267,7 +267,7 @@ def print_shipping_label(shipment: str):
 		_labels = sendcloud.get_label(shipment_id)
 		for i, label_url in enumerate(_labels, start=1):
 			content = sendcloud.download_label(label_url)
-			file_url = save_label_as_attachment(shipment, content, index=i)
+			file_url = save_label_as_attachment(shipment, content, i)
 			shipping_label.append(file_url)
 
 	return shipping_label
@@ -286,7 +286,7 @@ def print_return_label(shipment: str):
 		_labels = sendcloud.get_return_label(return_shipment_id)
 		for i, label_url in enumerate(_labels, start=1):
 			content = sendcloud.download_label(label_url)
-			file_url = save_label_as_attachment(shipment, content, index=i, label_type="return")
+			file_url = save_label_as_attachment(shipment, content, i, label_type="return")
 			return_label.append(file_url)
 
 	return return_label
@@ -350,7 +350,6 @@ def update_return_tracking(
 	service_provider,
 	return_shipment_id,
 ):
-	# Update Tracking info in Return Shipment
 	tracking_data = None
 	if service_provider == SENDCLOUD_PROVIDER:
 		sendcloud = SendCloudUtils()

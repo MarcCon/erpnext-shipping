@@ -18,7 +18,6 @@ SENDCLOUD_PROVIDER = "SendCloud"
 WEIGHT_DECIMALS = 3
 CURRENCY_DECIMALS = 2
 
-
 BASE_URL = "https://panel.sendcloud.sc/api"
 FETCH_SHIPPING_OPTIONS_URL = f"{BASE_URL}/v3/fetch-shipping-options"
 SHIPMENTS_URL = f"{BASE_URL}/v3/shipments"
@@ -152,7 +151,11 @@ class SendCloudUtils:
 		for i, parcel in enumerate(json.loads(shipment_parcel), start=1):
 			parcel_count = parcel.get("count", 1)
 			for j in range(parcel_count):
-				parcel_data = self.get_parcel(parcel, shipment, i)
+				parcel_data = self.get_parcel(
+					parcel,
+					shipment,
+					i,
+				)
 				parcels.append(parcel_data)
 
 		house_number, address = self.extract_house_number(pickup_address.address_line1)
@@ -227,7 +230,7 @@ class SendCloudUtils:
 		else:
 			# Non-Multicollo Logic: A separate API call is made for each package
 			shipments_results = []
-			for parcel in payload["parcels"]:
+			for parcel in parcels:
 				payload_single = payload.copy()
 				payload_single["parcels"] = [parcel]
 				try:
