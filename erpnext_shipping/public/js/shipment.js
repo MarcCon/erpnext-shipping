@@ -48,37 +48,6 @@ frappe.ui.form.on("Shipment", {
 				);
 			}
 
-			if (!frm.doc.return_shipment_id) {
-				frm.add_custom_button(
-					__("Create Return Label"),
-					function () {
-						frappe.call({
-							method: "erpnext_shipping.erpnext_shipping.shipping.fetch_return_shipping_rates",
-							freeze: true,
-							freeze_message: __("Fetching Return Shipping Rates"),
-							args: {
-								pickup_from_type: frm.doc.pickup_from_type,
-								delivery_to_type: frm.doc.delivery_to_type,
-								pickup_address_name: frm.doc.pickup_address_name,
-								delivery_address_name: frm.doc.delivery_address_name,
-								parcels: frm.doc.shipment_parcel,
-							},
-							callback: function (r) {
-								if (r.message && r.message.length) {
-									select_from_available_return_services(frm, r.message);
-								} else {
-									frappe.msgprint({
-										message: __("No Return Shipping Services available"),
-										title: __("Note"),
-									});
-								}
-							},
-						});
-					},
-					__("Tools")
-				);
-			}
-
 			if (frm.doc.tracking_status != "Delivered") {
 				frm.add_custom_button(
 					__("Update Tracking"),
