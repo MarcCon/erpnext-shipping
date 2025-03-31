@@ -27,6 +27,7 @@ frappe.ui.form.on("Shipment", {
 				},
 				__("Tools")
 			);
+
 			if (frm.doc.return_shipment_id) {
 				frm.add_custom_button(
 					__("Print Return Label"),
@@ -36,6 +37,38 @@ frappe.ui.form.on("Shipment", {
 					__("Tools")
 				);
 			}
+
+			if (!frm.doc.return_shipment_id) {
+				frm.add_custom_button(
+					__("Create Return Label"),
+					function () {
+						frappe.call({
+							method: "erpnext_shipping.erpnext_shipping.shipping.fetch_return_shipping_rates",
+							freeze: true,
+							freeze_message: __("Fetching Return Shipping Rates"),
+							args: {
+								pickup_from_type: frm.doc.pickup_from_type,
+								delivery_to_type: frm.doc.delivery_to_type,
+								pickup_address_name: frm.doc.pickup_address_name,
+								delivery_address_name: frm.doc.delivery_address_name,
+								parcels: frm.doc.shipment_parcel,
+							},
+							callback: function (r) {
+								if (r.message && r.message.length) {
+									select_from_available_return_services(frm, r.message);
+								} else {
+									frappe.msgprint({
+										message: __("No Return Shipping Services available"),
+										title: __("Note"),
+									});
+								}
+							},
+						});
+					},
+					__("Tools")
+				);
+			}
+
 			if (frm.doc.tracking_status != "Delivered") {
 				frm.add_custom_button(
 					__("Update Tracking"),
@@ -254,12 +287,6 @@ function select_from_available_services(frm, available_services) {
 		size: "extra-large",
 		fields: [
 			{
-				fieldtype: "Check",
-				fieldname: "create_return",
-				label: __("Create Return Shipment"),
-				default: 0,
-			},
-			{
 				fieldtype: "HTML",
 				fieldname: "available_services",
 				label: __("Available Services"),
@@ -331,5 +358,87 @@ function select_from_available_services(frm, available_services) {
 		});
 		dialog.hide();
 	};
+	dialog.show();
+}
+
+function select_from_available_return_services(frm, available_services) {
+	const arranged_services = available_services.reduce(
+		(prev, curr) => {
+			if (curr.is_preferred) {
+				prev.preferred_services.push(curr);
+			} else {
+				prev.other_services.push(curr);
+			}
+			return prev;
+		},
+		{ preferred_services: [], other_services: [] }
+	);
+
+	const dialog = new frappe.ui.Dialog({
+		title: __("Select Service to Create Return Shipment"),
+		size: "extra-large",
+		fields: [
+			{
+				fieldtype: "HTML",
+				fieldname: "available_services",
+				label: __("Available Return Services"),
+			},
+		],
+	});
+
+	dialog.fields_dict.available_services.$wrapper.html(
+		frappe.render_template("shipment_service_selector", {
+			header_columns: [__("Platform"), __("Carrier"), __("Parcel Service"), __("Price"), ""],
+			data: arranged_services,
+		})
+	);
+
+	dialog.$body.on("click", ".btn", function () {
+		const serviceType = $(this).attr("data-type");
+		const serviceIndex = cint($(this).attr("id").split("-")[2]);
+		const serviceData = arranged_services[serviceType][serviceIndex];
+		frm.select_return_row(serviceData);
+	});
+
+	frm.select_return_row = function (serviceData) {
+		frappe.call({
+			method: "erpnext_shipping.erpnext_shipping.shipping.create_return_shipment",
+			freeze: true,
+			freeze_message: __("Creating Return Shipment"),
+			args: {
+				shipment: frm.doc.name,
+				pickup_from_type: frm.doc.pickup_from_type,
+				delivery_to_type: frm.doc.delivery_to_type,
+				pickup_address_name: frm.doc.pickup_address_name,
+				delivery_address_name: frm.doc.delivery_address_name,
+				shipment_parcel: frm.doc.shipment_parcel,
+				pickup_contact_name:
+					frm.doc.pickup_from_type === "Company"
+						? frm.doc.pickup_contact_person
+						: frm.doc.pickup_contact_name,
+				delivery_contact_name: frm.doc.delivery_contact_name,
+				service_data: serviceData,
+			},
+			callback: function (r) {
+				if (!r.exc) {
+					frm.reload_doc();
+					frappe.msgprint({
+						message: __("Return Shipment {0} has been created.", [
+							r.message.return_id.bold(),
+						]),
+						title: __("Return Shipment Created"),
+						indicator: "green",
+					});
+					frm.events.update_return_tracking(
+						frm,
+						r.message.service_provider,
+						r.message.return_id
+					);
+				}
+			},
+		});
+		dialog.hide();
+	};
+
 	dialog.show();
 }
