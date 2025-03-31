@@ -137,6 +137,7 @@ def create_shipment(
 
 	if pickup_from_type != "Company":
 		pickup_contact = get_contact(pickup_contact_name)
+
 	else:
 		pickup_contact = get_company_contact(user=pickup_contact_name)
 		pickup_contact.email_id = pickup_contact.pop("email", None)

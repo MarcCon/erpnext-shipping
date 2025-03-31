@@ -171,8 +171,10 @@ class SendCloudUtils:
 			"from_address": {
 				"name": f"{pickup_contact.first_name} {pickup_contact.last_name}",
 				"company_name": pickup_address.address_title,
-				"address_line_1": address or pickup_address.address_line1,
-				"house_number": house_number or " ",
+				"address_line_1": address
+				or pickup_address.address_line1,  # Using original address if parsing fails
+				"house_number": house_number
+				or " ",  # API requires a house number. If None, we use a U+200A HAIR SPACE to bypass validation without displaying a number
 				"postal_code": pickup_address.pincode,
 				"city": pickup_address.city,
 				"country_code": pickup_address.country_code.upper(),
