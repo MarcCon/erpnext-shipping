@@ -123,7 +123,9 @@ def create_shipment(
 	delivery_contact_name=None,
 	delivery_notes=None,
 ):
-	# Create Shipment for the selected provider
+	if isinstance(delivery_notes, str):
+		delivery_notes = json.loads(delivery_notes)
+
 	if delivery_notes is None:
 		delivery_notes = []
 
@@ -309,6 +311,9 @@ def save_label_as_attachment(
 
 @frappe.whitelist()
 def update_tracking(shipment, service_provider, shipment_id, delivery_notes=None):
+	if isinstance(delivery_notes, str):
+		delivery_notes = json.loads(delivery_notes)
+
 	if delivery_notes is None:
 		delivery_notes = []
 
@@ -366,9 +371,6 @@ def update_return_tracking(
 def update_delivery_note(delivery_notes, shipment_info=None, tracking_info=None):
 	# Update Shipment Info in Delivery Note
 	# Using db_set since some services might not exist
-	if isinstance(delivery_notes, str):
-		delivery_notes = json.loads(delivery_notes)
-
 	delivery_notes = list(set(delivery_notes))
 
 	for delivery_note in delivery_notes:
